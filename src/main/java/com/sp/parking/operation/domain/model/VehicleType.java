@@ -7,10 +7,10 @@ public enum VehicleType {
   BICYCLE;
 
   public boolean usesMotorcycleSpace() {
-    return this == MOTORCYCLE;
+    return this == MOTORCYCLE || this == BICYCLE;
   }
 
   public boolean requiresKeySlot() {
-    return this != MOTORCYCLE;
+    return this == CAR || this == HEAVY;
   }
 }

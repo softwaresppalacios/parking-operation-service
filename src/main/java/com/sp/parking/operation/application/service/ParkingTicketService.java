@@ -32,9 +32,9 @@ public class ParkingTicketService {
     ParkingResource keySlot = null;
     ParkingResource helmetLocker = null;
     if (type.requiresKeySlot()) {
-      keySlot = reserveRequiredResource(tenantId, ResourceKind.KEY_SLOT, request.keySlotCode(), normalizedPlate, "Key slot is required");
+      keySlot = reserveOptionalResource(tenantId, ResourceKind.KEY_SLOT, request.keySlotCode(), normalizedPlate, "Key slot is not available");
     } else if (request.helmetLockerCode() != null && !request.helmetLockerCode().isBlank()) {
-      helmetLocker = reserveRequiredResource(tenantId, ResourceKind.HELMET_LOCKER, request.helmetLockerCode(), normalizedPlate, "Helmet locker is not available");
+      helmetLocker = reserveOptionalResource(tenantId, ResourceKind.HELMET_LOCKER, request.helmetLockerCode(), normalizedPlate, "Helmet locker is not available");
     }
 
     ParkingTicket ticket = ParkingTicket.builder()
@@ -93,9 +93,9 @@ public class ParkingTicketService {
     return resource;
   }
 
-  private ParkingResource reserveRequiredResource(UUID tenantId, ResourceKind kind, String code, String plate, String message) {
+  private ParkingResource reserveOptionalResource(UUID tenantId, ResourceKind kind, String code, String plate, String message) {
     if (code == null || code.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+      return null;
     }
     ParkingResource resource = resourceRepository.findByTenantIdAndKindAndCode(tenantId, kind, code)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, message));
