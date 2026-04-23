@@ -1,0 +1,22 @@
+server:
+  port: 8082
+spring:
+  application:
+    name: parking-operation-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/parking_operation_service_db?currentSchema=parking_operation_service}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        default_schema: parking_operation_service
+        format_sql: true
+  sql:
+    init:
+      mode: always
+services:
+  tenant-management:
+    base-url: ${TENANT_SERVICE_URL:http://localhost:8081/api}
