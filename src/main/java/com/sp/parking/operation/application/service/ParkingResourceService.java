@@ -35,24 +35,23 @@ public class ParkingResourceService {
 
   @Transactional
   public void ensureDefaults(UUID tenantId) {
-    TenantConfigurationClient.BranchCapacity capacity = tenantConfigurationClient.findBranchCapacity(tenantId);
-    syncResourceSet(tenantId, ResourceKind.PARKING_SPACE, VehicleType.CAR, "CARROS", "C", capacity.carCapacity());
-    syncResourceSet(tenantId, ResourceKind.PARKING_SPACE, VehicleType.MOTORCYCLE, "MOTOS", "M", capacity.motorcycleCapacity());
-    syncResourceSet(tenantId, ResourceKind.KEY_SLOT, null, "LLAVES", "T", capacity.keyRackCapacity());
-    syncResourceSet(tenantId, ResourceKind.HELMET_LOCKER, null, "CASCOS", "K", capacity.helmetLockerCapacity());
+    TenantConfigurationClient.BranchResources config = tenantConfigurationClient.findBranchResources(tenantId);
+    if (!config.manageResources()) {
+      return;
+    }
+    syncResourceSet(tenantId, ResourceKind.PARKING_SPACE, VehicleType.CAR, "CARROS", codesOrDefaults("C", config.carCapacity()));
+    syncResourceSet(tenantId, ResourceKind.PARKING_SPACE, VehicleType.MOTORCYCLE, "MOTOS", codesOrDefaults("M", config.motorcycleCapacity()));
+    syncResourceSet(tenantId, ResourceKind.KEY_SLOT, null, "LLAVES", codesOrDefaults("T", config.keyRackCapacity()));
+    syncResourceSet(tenantId, ResourceKind.HELMET_LOCKER, null, "CASCOS", codesOrDefaults("K", config.helmetLockerCapacity()));
   }
 
-  private String code(String prefix, int number) {
-    return prefix + String.format("%02d", number);
-  }
-
-  private void syncResourceSet(UUID tenantId, ResourceKind kind, VehicleType vehicleType, String zoneCode, String prefix, int desiredCount) {
+  private void syncResourceSet(UUID tenantId, ResourceKind kind, VehicleType vehicleType, String zoneCode, List<String> desiredCodes) {
     List<ParkingResource> currentResources = currentResources(tenantId, kind, vehicleType);
     Map<String, ParkingResource> currentByCode = currentResources.stream()
-      .collect(java.util.stream.Collectors.toMap(ParkingResource::getCode, Function.identity()));
+      .collect(java.util.stream.Collectors.toMap(ParkingResource::getCode, Function.identity(), (left, right) -> left));
 
-    for (int i = 1; i <= desiredCount; i++) {
-      String code = code(prefix, i);
+    for (String desiredCode : desiredCodes) {
+      String code = desiredCode.toUpperCase(Locale.ROOT);
       ParkingResource existing = currentByCode.get(code);
       if (existing != null) {
         existing.setZoneCode(zoneCode);
@@ -69,7 +68,7 @@ public class ParkingResourceService {
     }
 
     List<ParkingResource> removable = currentResources.stream()
-      .filter(resource -> extractSequence(resource.getCode()) > desiredCount)
+      .filter(resource -> desiredCodes.stream().noneMatch(code -> code.equalsIgnoreCase(resource.getCode())))
       .filter(resource -> !resource.isOccupied() && !resource.isReserved())
       .toList();
 
@@ -84,9 +83,10 @@ public class ParkingResourceService {
       .toList();
   }
 
-  private int extractSequence(String code) {
-    String digits = code == null ? "" : code.replaceAll("\\D+", "");
-    if (digits.isBlank()) return 0;
-    return Integer.parseInt(digits);
+  private List<String> codesOrDefaults(String prefix, int count) {
+    int safeCount = Math.max(0, count);
+    return java.util.stream.IntStream.rangeClosed(1, safeCount)
+      .mapToObj(i -> prefix + String.format("%02d", i))
+      .toList();
   }
 }

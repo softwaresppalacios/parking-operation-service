@@ -15,7 +15,7 @@ public class TenantConfigurationClient {
     this.restClient = restClientBuilder.baseUrl(tenantBaseUrl).build();
   }
 
-  public BranchCapacity findBranchCapacity(UUID tenantId) {
+  public BranchResources findBranchResources(UUID tenantId) {
     List<TenantSummary> tenants = restClient.get()
       .uri("/tenants")
       .retrieve()
@@ -29,20 +29,38 @@ public class TenantConfigurationClient {
       .filter(tenant -> tenant.uuid().equals(tenantId))
       .findFirst()
       .flatMap(tenant -> tenant.branches().stream().findFirst())
-      .map(branch -> new BranchCapacity(
+      .map(branch -> new BranchResources(
+        safeManageResources(branch.manageResources()),
         safe(branch.carCapacity()),
         safe(branch.motorcycleCapacity()),
         safe(branch.keyRackCapacity()),
         safe(branch.helmetLockerCapacity())
       ))
-      .orElse(new BranchCapacity(0, 0, 0, 0));
+      .orElse(new BranchResources(true, 0, 0, 0, 0));
+  }
+
+  private boolean safeManageResources(Boolean value) {
+    return value == null || value;
   }
 
   private int safe(Integer value) {
     return value == null ? 0 : Math.max(0, value);
   }
 
-  public record BranchCapacity(int carCapacity, int motorcycleCapacity, int keyRackCapacity, int helmetLockerCapacity) {}
+  public record BranchResources(
+    boolean manageResources,
+    int carCapacity,
+    int motorcycleCapacity,
+    int keyRackCapacity,
+    int helmetLockerCapacity
+  ) {}
   public record TenantSummary(UUID uuid, List<BranchSummary> branches) {}
-  public record BranchSummary(UUID uuid, Integer carCapacity, Integer motorcycleCapacity, Integer keyRackCapacity, Integer helmetLockerCapacity) {}
+  public record BranchSummary(
+    UUID uuid,
+    Boolean manageResources,
+    Integer carCapacity,
+    Integer motorcycleCapacity,
+    Integer keyRackCapacity,
+    Integer helmetLockerCapacity
+  ) {}
 }

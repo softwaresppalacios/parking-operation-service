@@ -18,22 +18,25 @@ public class ParkingTicketService {
   private final ParkingTicketRepository ticketRepository;
   private final ParkingResourceRepository resourceRepository;
   private final ParkingResourceService resourceService;
+  private final TenantConfigurationClient tenantConfigurationClient;
   private final TicketMapper mapper;
 
   @Transactional
   public TicketResponse checkIn(UUID tenantId, CheckInRequest request) {
     VehicleType type = request.vehicleType() == null ? VehicleType.CAR : request.vehicleType();
     resourceService.ensureDefaults(tenantId);
+    TenantConfigurationClient.BranchResources config = tenantConfigurationClient.findBranchResources(tenantId);
     String normalizedPlate = normalizePlate(request.plate());
     ticketRepository.findFirstByTenantIdAndPlateIgnoreCaseAndStatus(tenantId, normalizedPlate, TicketStatus.ACTIVE)
       .ifPresent(t -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Vehicle already has an active ticket"); });
 
-    ParkingResource space = reserveSpace(tenantId, type, request.spaceCode(), normalizedPlate);
+    ParkingResource space = config.manageResources() ? reserveSpace(tenantId, type, request.spaceCode(), normalizedPlate) : null;
     ParkingResource keySlot = null;
     ParkingResource helmetLocker = null;
-    if (type.requiresKeySlot()) {
+    if (config.manageResources() && type.requiresKeySlot()) {
       keySlot = reserveOptionalResource(tenantId, ResourceKind.KEY_SLOT, request.keySlotCode(), normalizedPlate, "Key slot is not available");
-    } else if (request.helmetLockerCode() != null && !request.helmetLockerCode().isBlank()) {
+    }
+    if (config.manageResources() && (type == VehicleType.MOTORCYCLE || type == VehicleType.BICYCLE)) {
       helmetLocker = reserveOptionalResource(tenantId, ResourceKind.HELMET_LOCKER, request.helmetLockerCode(), normalizedPlate, "Helmet locker is not available");
     }
 
@@ -42,7 +45,7 @@ public class ParkingTicketService {
       .plate(normalizedPlate)
       .vehicleType(type)
       .driverPhone(request.driverPhone())
-      .spaceCode(space.getCode())
+      .spaceCode(space == null ? normalizeOptionalCode(request.spaceCode()) : space.getCode())
       .keySlotCode(keySlot == null ? null : keySlot.getCode())
       .helmetLockerCode(helmetLocker == null ? null : helmetLocker.getCode())
       .monthlySubscription(request.monthlySubscription())
@@ -117,5 +120,10 @@ public class ParkingTicketService {
 
   private String normalizePlate(String plate) {
     return plate == null ? "" : plate.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+  }
+
+  private String normalizeOptionalCode(String code) {
+    if (code == null || code.isBlank()) return null;
+    return code.trim().toUpperCase(Locale.ROOT);
   }
 }
