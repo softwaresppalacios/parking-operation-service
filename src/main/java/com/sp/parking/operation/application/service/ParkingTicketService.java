@@ -78,6 +78,11 @@ public class ParkingTicketService {
     return ticketRepository.findByTenantIdAndStatusOrderByCheckedInAtDesc(tenantId, TicketStatus.ACTIVE).stream().map(mapper::toResponse).toList();
   }
 
+  @Transactional(readOnly = true)
+  public List<TicketResponse> recent(UUID tenantId) {
+    return ticketRepository.findTop25ByTenantIdOrderByCheckedInAtDesc(tenantId).stream().map(mapper::toResponse).toList();
+  }
+
   private ParkingResource reserveSpace(UUID tenantId, VehicleType type, String requestedCode, String plate) {
     VehicleType spaceType = type.usesMotorcycleSpace() ? VehicleType.MOTORCYCLE : VehicleType.CAR;
     ParkingResource resource = requestedCode == null || requestedCode.isBlank()

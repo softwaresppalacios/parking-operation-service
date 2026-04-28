@@ -32,4 +32,9 @@ public class TicketController {
   public List<TicketResponse> active(@RequestHeader("X-Tenant-Id") UUID tenantId) {
     return ticketService.active(tenantId);
   }
+
+  @GetMapping("/recent")
+  public List<TicketResponse> recent(@RequestHeader("X-Tenant-Id") UUID tenantId) {
+    return ticketService.recent(tenantId);
+  }
 }
