@@ -11,5 +11,6 @@ public interface ParkingResourceRepository extends JpaRepository<ParkingResource
   Optional<ParkingResource> findFirstByTenantIdAndKindAndOccupiedFalseAndReservedFalseOrderByCode(UUID tenantId, ResourceKind kind);
   long countByTenantIdAndKindAndOccupiedTrue(UUID tenantId, ResourceKind kind);
   long countByTenantIdAndKindAndOccupiedFalse(UUID tenantId, ResourceKind kind);
+  long countByTenantIdAndKindAndVehicleTypeAndOccupiedTrue(UUID tenantId, ResourceKind kind, VehicleType vehicleType);
+  long countByTenantIdAndKindAndVehicleTypeAndOccupiedFalseAndReservedFalse(UUID tenantId, ResourceKind kind, VehicleType vehicleType);
 }
-
