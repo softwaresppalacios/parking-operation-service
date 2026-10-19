@@ -1,7 +1,9 @@
 package com.sp.parking.operation.application.service;
 
+import com.sp.parking.operation.infraestructure.security.TenantAccessFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import java.util.List;
@@ -18,6 +20,10 @@ public class TenantConfigurationClient {
   public BranchResources findBranchResources(UUID tenantId) {
     List<TenantSummary> tenants = restClient.get()
       .uri("/tenants")
+      .headers(headers -> {
+        String authorization = TenantAccessFilter.currentAuthorization();
+        if (authorization != null) headers.set(HttpHeaders.AUTHORIZATION, authorization);
+      })
       .retrieve()
       .body(new ParameterizedTypeReference<List<TenantSummary>>() {});
 
