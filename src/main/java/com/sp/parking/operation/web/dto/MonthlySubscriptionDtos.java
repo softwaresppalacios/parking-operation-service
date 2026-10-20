@@ -17,6 +17,7 @@ public final class MonthlySubscriptionDtos {
     @NotNull VehicleType vehicleType,
     @NotNull @DecimalMin("0.0") BigDecimal amount,
     String paymentMethod,
+    @Size(max = 80, message = "La referencia del pago es demasiado larga") String onlineReference,
     @NotNull LocalDate startsAt,
     @Min(1) Integer months
   ) {}

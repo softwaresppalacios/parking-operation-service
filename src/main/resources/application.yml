@@ -3,6 +3,9 @@ server:
 spring:
   application:
     name: parking-operation-service
+  config:
+    # Secretos locales (token de WhatsApp): archivo .env junto al pom, fuera de git.
+    import: optional:file:.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/parking_operation_service_db?currentSchema=parking_operation_service}
     username: ${DB_USERNAME:postgres}
@@ -20,3 +23,17 @@ spring:
 services:
   tenant-management:
     base-url: ${TENANT_SERVICE_URL:http://localhost:8081/api}
+  pricing:
+    base-url: ${PRICING_SERVICE_URL:http://localhost:8083/api}
+  payment-cash:
+    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8084/api}
+whatsapp:
+  # Sin token o sin numero el envio queda desactivado y la entrada se registra igual.
+  # WHATSAPP_ENABLED=false pausa el envio (p. ej. mientras Meta revisa la plantilla) sin borrar el token.
+  enabled: ${WHATSAPP_ENABLED:true}
+  api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v21.0}
+  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+  access-token: ${WHATSAPP_ACCESS_TOKEN:}
+  template-name: ${WHATSAPP_TEMPLATE_NAME:ticket_sp_parqueaderos}
+  template-language: ${WHATSAPP_TEMPLATE_LANGUAGE:es_CO}
+  default-country-code: ${WHATSAPP_DEFAULT_COUNTRY_CODE:57}

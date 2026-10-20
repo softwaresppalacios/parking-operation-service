@@ -3,14 +3,18 @@ package com.sp.parking.operation.application.service;
 import com.sp.parking.operation.application.mapper.TicketMapper;
 import com.sp.parking.operation.domain.model.*;
 import com.sp.parking.operation.domain.repository.*;
+import com.sp.parking.operation.infraestructure.client.PaymentClient;
+import com.sp.parking.operation.infraestructure.client.PricingClient;
 import com.sp.parking.operation.web.dto.TicketDtos.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,8 @@ public class ParkingTicketService {
   private final ParkingResourceRepository resourceRepository;
   private final ParkingResourceService resourceService;
   private final TenantConfigurationClient tenantConfigurationClient;
+  private final PricingClient pricingClient;
+  private final PaymentClient paymentClient;
   private final TicketMapper mapper;
 
   @Transactional
@@ -32,12 +38,15 @@ public class ParkingTicketService {
 
     ParkingResource space = config.manageResources() ? reserveSpace(tenantId, type, request.spaceCode(), normalizedPlate) : null;
     ParkingResource keySlot = null;
-    ParkingResource helmetLocker = null;
+    List<String> helmetLockers = List.of();
     if (config.manageResources() && type.requiresKeySlot()) {
       keySlot = reserveOptionalResource(tenantId, ResourceKind.KEY_SLOT, request.keySlotCode(), normalizedPlate, "Key slot is not available");
     }
     if (config.manageResources() && (type == VehicleType.MOTORCYCLE || type == VehicleType.BICYCLE)) {
-      helmetLocker = reserveOptionalResource(tenantId, ResourceKind.HELMET_LOCKER, request.helmetLockerCode(), normalizedPlate, "Helmet locker is not available");
+      helmetLockers = requestedHelmetLockers(request, type).stream()
+        .map(code -> reserveOptionalResource(tenantId, ResourceKind.HELMET_LOCKER, code, normalizedPlate, "El casillero de casco " + code + " no está disponible"))
+        .map(ParkingResource::getCode)
+        .toList();
     }
 
     ParkingTicket ticket = ParkingTicket.builder()
@@ -45,24 +54,51 @@ public class ParkingTicketService {
       .plate(normalizedPlate)
       .vehicleType(type)
       .driverPhone(request.driverPhone())
+      .driverName(blankToNull(request.driverName()))
+      .driverDocument(blankToNull(request.driverDocument()))
       .spaceCode(space == null ? normalizeOptionalCode(request.spaceCode()) : space.getCode())
       .keySlotCode(keySlot == null ? null : keySlot.getCode())
-      .helmetLockerCode(helmetLocker == null ? null : helmetLocker.getCode())
+      .helmetLockerCode(helmetLockers.isEmpty() ? null : helmetLockers.get(0))
+      .secondHelmetLockerCode(helmetLockers.size() > 1 ? helmetLockers.get(1) : null)
       .monthlySubscription(request.monthlySubscription())
       .build();
     return mapper.toResponse(ticketRepository.save(ticket));
   }
 
+  /**
+   * Registra la salida y su cobro como una sola operacion: el valor lo calcula pricing-service y el pago
+   * entra a la caja de payment-cash-service. Si el pago falla, la salida se revierte.
+   * Los vehiculos con mensualidad salen sin cobro.
+   */
   @Transactional
   public TicketResponse checkOut(UUID tenantId, UUID ticketUuid, CheckOutRequest request) {
     ParkingTicket ticket = ticketRepository.findByTenantIdAndUuid(tenantId, ticketUuid)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
-    ticket.setCheckedOutAt(Instant.now());
-    ticket.setAmountDue(request.amountDue());
+    if (ticket.getStatus() != TicketStatus.ACTIVE) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Este vehículo ya registró su salida");
+    }
+    Instant checkedOutAt = Instant.now();
+    ticket.setCheckedOutAt(checkedOutAt);
     ticket.setStatus(TicketStatus.PAID);
     releaseResource(tenantId, ResourceKind.PARKING_SPACE, ticket.getSpaceCode());
     releaseResource(tenantId, ResourceKind.KEY_SLOT, ticket.getKeySlotCode());
     releaseResource(tenantId, ResourceKind.HELMET_LOCKER, ticket.getHelmetLockerCode());
+    releaseResource(tenantId, ResourceKind.HELMET_LOCKER, ticket.getSecondHelmetLockerCode());
+
+    if (ticket.isMonthlySubscription()) {
+      ticket.setAmountDue(BigDecimal.ZERO);
+      return mapper.toResponse(ticket);
+    }
+    BigDecimal amount = pricingClient.amountDue(tenantId, ticket);
+    ticket.setAmountDue(amount);
+    if (amount.signum() > 0) {
+      String method = PaymentMethods.require(request.paymentMethod());
+      ticket.setPaymentMethod(method);
+      paymentClient.register(tenantId, new PaymentClient.PaymentRequest(
+        "PARKING", ticket.getUuid(), amount, method, request.onlineReference(),
+        ticket.getPlate(), ticket.getVehicleType().name(), ticket.getCheckedInAt(), checkedOutAt, null
+      ));
+    }
     return mapper.toResponse(ticket);
   }
 
@@ -101,6 +137,25 @@ public class ParkingTicketService {
     return resource;
   }
 
+  /** Casilleros de casco pedidos (uno por casco), sin repetidos: hasta 2 para motos y 1 para bicicletas. */
+  private List<String> requestedHelmetLockers(CheckInRequest request, VehicleType type) {
+    List<String> codes = Stream.concat(
+        Stream.ofNullable(request.helmetLockerCode()),
+        request.helmetLockerCodes() == null ? Stream.empty() : request.helmetLockerCodes().stream()
+      )
+      .filter(code -> code != null && !code.isBlank())
+      .map(code -> code.trim().toUpperCase(Locale.ROOT))
+      .distinct()
+      .toList();
+    int max = type == VehicleType.MOTORCYCLE ? 2 : 1;
+    if (codes.size() > max) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, type == VehicleType.MOTORCYCLE
+        ? "Una moto puede guardar máximo 2 cascos"
+        : "Una bicicleta puede usar un solo casillero de casco");
+    }
+    return codes;
+  }
+
   private ParkingResource reserveOptionalResource(UUID tenantId, ResourceKind kind, String code, String plate, String message) {
     if (code == null || code.isBlank()) {
       return null;
@@ -125,6 +180,10 @@ public class ParkingTicketService {
 
   private String normalizePlate(String plate) {
     return plate == null ? "" : plate.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+  }
+
+  private static String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 
   private String normalizeOptionalCode(String code) {

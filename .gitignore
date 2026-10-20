@@ -7,3 +7,6 @@ logs/
 .idea/
 out/
 
+
+# Secretos locales (token de WhatsApp, etc.)
+.env
