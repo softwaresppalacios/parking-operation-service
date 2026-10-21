@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -26,6 +28,7 @@ public class ParkingTicketService {
   private final PricingClient pricingClient;
   private final PaymentClient paymentClient;
   private final TicketMapper mapper;
+  private final MonthlySubscriptionRepository monthlyRepository;
 
   @Transactional
   public TicketResponse checkIn(UUID tenantId, CheckInRequest request) {
@@ -35,6 +38,13 @@ public class ParkingTicketService {
     String normalizedPlate = normalizePlate(request.plate());
     ticketRepository.findFirstByTenantIdAndPlateIgnoreCaseAndStatus(tenantId, normalizedPlate, TicketStatus.ACTIVE)
       .ifPresent(t -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Vehicle already has an active ticket"); });
+    if (request.monthlySubscription()) {
+      // Una mensualidad cancelada o vencida no da derecho a entrar sin cobro.
+      monthlyRepository.findFirstByTenantIdAndPlateIgnoreCaseAndActiveTrueAndExpiresAtGreaterThanEqualOrderByExpiresAtDesc(
+          tenantId, normalizedPlate, LocalDate.now(ZoneId.of("America/Bogota")))
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+          "La placa " + normalizedPlate + " no tiene una mensualidad vigente; regístrala con cobro por hora o renueva la mensualidad"));
+    }
 
     ParkingResource space = config.manageResources() ? reserveSpace(tenantId, type, request.spaceCode(), normalizedPlate) : null;
     ParkingResource keySlot = null;
@@ -117,6 +127,17 @@ public class ParkingTicketService {
   @Transactional(readOnly = true)
   public List<TicketResponse> recent(UUID tenantId) {
     return ticketRepository.findTop25ByTenantIdOrderByCheckedInAtDesc(tenantId).stream().map(mapper::toResponse).toList();
+  }
+
+  /** Tickets con entrada en el rango de fechas (dias de Colombia), para reportes. Maximo un año. */
+  @Transactional(readOnly = true)
+  public List<TicketResponse> history(UUID tenantId, LocalDate from, LocalDate to) {
+    if (to.isBefore(from)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fecha inicio debe ser anterior a la fecha fin");
+    if (from.plusDays(366).isBefore(to)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El rango máximo es de un año");
+    ZoneId zone = ZoneId.of("America/Bogota");
+    return ticketRepository.findByTenantIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThanOrderByCheckedInAtDesc(
+        tenantId, from.atStartOfDay(zone).toInstant(), to.plusDays(1).atStartOfDay(zone).toInstant())
+      .stream().map(mapper::toResponse).toList();
   }
 
   private ParkingResource reserveSpace(UUID tenantId, VehicleType type, String requestedCode, String plate) {

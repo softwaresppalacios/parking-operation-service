@@ -22,6 +22,29 @@ public final class MonthlySubscriptionDtos {
     @Min(1) Integer months
   ) {}
 
+  /** Datos del cliente y del vehiculo. El valor mensual aplica a las proximas renovaciones; no cambia lo ya cobrado. */
+  public record UpdateMonthlySubscriptionRequest(
+    @NotBlank(message = "Ingresa el nombre del cliente") @Size(max = 120) String customerName,
+    @Size(max = 20, message = "La cédula es demasiado larga") String customerDocument,
+    @Size(max = 20, message = "El celular es demasiado largo") String customerPhone,
+    @NotBlank(message = "Ingresa la placa") String plate,
+    @NotNull(message = "Selecciona el tipo de vehículo") VehicleType vehicleType,
+    @NotNull(message = "Ingresa el valor mensual") @DecimalMin(value = "0.0", message = "El valor mensual no puede ser negativo") BigDecimal amount
+  ) {}
+
+  /** Extiende la vigencia y registra el cobro. amount vacio = valor mensual actual por cada mes. */
+  public record RenewMonthlySubscriptionRequest(
+    @NotNull(message = "Indica cuántos meses renovar") @Min(value = 1, message = "Renueva al menos un mes") @Max(value = 24, message = "Máximo 24 meses por renovación") Integer months,
+    @DecimalMin(value = "0.0", message = "El valor no puede ser negativo") BigDecimal amount,
+    String paymentMethod,
+    @Size(max = 80, message = "La referencia del pago es demasiado larga") String onlineReference
+  ) {}
+
+  public record CancelMonthlySubscriptionRequest(
+    @Size(max = 200, message = "El motivo es demasiado largo") String reason
+  ) {}
+
+  /** status: ACTIVE (vigente), EXPIRED (vencida, se puede renovar) o CANCELLED. */
   public record MonthlySubscriptionResponse(
     Long id,
     UUID uuid,
@@ -35,6 +58,10 @@ public final class MonthlySubscriptionDtos {
     LocalDate startsAt,
     LocalDate expiresAt,
     Instant paidAt,
-    boolean active
+    boolean active,
+    String status,
+    Instant renewedAt,
+    Instant cancelledAt,
+    String cancelReason
   ) {}
 }

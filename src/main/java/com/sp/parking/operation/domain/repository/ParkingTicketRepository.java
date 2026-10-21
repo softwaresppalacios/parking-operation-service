@@ -1,6 +1,7 @@
 package com.sp.parking.operation.domain.repository;
 
 import com.sp.parking.operation.domain.model.*;
+import java.time.Instant;
 import java.util.*;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -10,5 +11,6 @@ public interface ParkingTicketRepository extends JpaRepository<ParkingTicket, Lo
   Optional<ParkingTicket> findByTenantIdAndUuid(UUID tenantId, UUID uuid);
   Optional<ParkingTicket> findFirstByTenantIdAndPlateIgnoreCaseAndStatus(UUID tenantId, String plate, TicketStatus status);
   long countByTenantIdAndStatus(UUID tenantId, TicketStatus status);
+  List<ParkingTicket> findByTenantIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThanOrderByCheckedInAtDesc(UUID tenantId, Instant from, Instant to);
 }
 

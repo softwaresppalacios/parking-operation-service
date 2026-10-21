@@ -31,7 +31,13 @@ public class MonthlySubscription {
   @Column(nullable = false)
   private LocalDate expiresAt;
   private Instant paidAt;
+  /** false cuando se cancelo; una mensualidad vencida sigue activa hasta que se renueve o cancele. */
   private boolean active;
+  /** Ultima renovacion (pago que extendio la vigencia). */
+  private Instant renewedAt;
+  private Instant cancelledAt;
+  private String cancelReason;
+  private Instant updatedAt;
 
   @PrePersist
   void prePersist() {
