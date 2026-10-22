@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Table(indexes = @Index(name = "idx_ticket_tenant_checked_in", columnList = "tenantId, checkedInAt"))
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
 public class ParkingTicket {
   @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

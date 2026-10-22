@@ -8,10 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import com.sp.parking.operation.infraestructure.client.AuditClient;
-import com.sp.parking.operation.infraestructure.security.TenantAccessFilter;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
@@ -82,17 +79,14 @@ public class TicketController {
     return ticketService.recent(tenantId);
   }
 
-  /** Historial por fechas para reportes: solo propietario o administrador. Por defecto el mes en curso. */
+  /** Historial de tickets por fecha de entrada (maximo un año). Por defecto el mes en curso. */
   @GetMapping("/history")
   public List<TicketResponse> history(
     @RequestHeader("X-Tenant-Id") UUID tenantId,
-    @RequestAttribute(name = TenantAccessFilter.ROLE_ATTRIBUTE, required = false) String role,
     @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
     @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
   ) {
-    if (!"OWNER".equals(role) && !"ADMIN".equals(role)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el propietario o un administrador pueden ver los reportes");
-    }
+    // Abierto a todos los roles: el cajero tambien consulta tickets. Los reportes de ingresos siguen restringidos.
     LocalDate today = LocalDate.now(ZoneId.of("America/Bogota"));
     return ticketService.history(tenantId, from == null ? today.withDayOfMonth(1) : from, to == null ? today : to);
   }
