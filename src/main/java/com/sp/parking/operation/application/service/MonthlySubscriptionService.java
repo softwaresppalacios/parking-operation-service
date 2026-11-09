@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +41,10 @@ public class MonthlySubscriptionService {
   /** Crea la mensualidad y registra su cobro en caja en la misma operacion; si el pago falla, no se crea. */
   @Transactional
   public MonthlySubscriptionResponse create(UUID tenantId, CreateMonthlySubscriptionRequest request) {
+    // Una mensualidad no puede empezar en el pasado: se cobraria por dias que ya no se usaron.
+    if (request.startsAt().isBefore(LocalDate.now(BOGOTA))) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La fecha de inicio no puede ser anterior a hoy");
+    }
     String method = paymentMethod(request.paymentMethod());
     String plate = normalizePlate(request.plate());
     ensureNoOtherActive(tenantId, plate, null);
@@ -61,6 +66,11 @@ public class MonthlySubscriptionService {
     return toResponse(saved);
   }
 
+  @Transactional(readOnly = true)
+  public MonthlySubscriptionResponse findOne(UUID tenantId, UUID uuid) {
+    return toResponse(find(tenantId, uuid));
+  }
+
   /** Corrige datos del cliente o del vehiculo. No toca vigencia ni lo ya cobrado. */
   @Transactional
   public MonthlySubscriptionResponse update(UUID tenantId, UUID uuid, UpdateMonthlySubscriptionRequest request) {
@@ -73,7 +83,10 @@ public class MonthlySubscriptionService {
     if (!plate.equals(subscription.getPlate())) ensureNoOtherActive(tenantId, plate, subscription.getUuid());
     subscription.setCustomerName(request.customerName().trim());
     subscription.setCustomerDocument(blankToNull(request.customerDocument()));
-    subscription.setCustomerPhone(blankToNull(request.customerPhone()));
+    String phone = blankToNull(request.customerPhone());
+    // Con otro celular el error del recordatorio anterior ya no aplica; se reintenta en la siguiente pasada.
+    if (!Objects.equals(phone, subscription.getCustomerPhone())) subscription.setReminderError(null);
+    subscription.setCustomerPhone(phone);
     subscription.setPlate(plate);
     subscription.setVehicleType(request.vehicleType());
     subscription.setAmount(request.amount());
@@ -106,6 +119,7 @@ public class MonthlySubscriptionService {
       : subscription.getAmount().multiply(BigDecimal.valueOf(months));
     String method = paymentMethod(request.paymentMethod());
     subscription.setExpiresAt(newExpiry);
+    subscription.setReminderError(null);
     subscription.setPaymentMethod(method);
     subscription.setRenewedAt(Instant.now());
     subscription.setPaidAt(Instant.now());
@@ -183,7 +197,10 @@ public class MonthlySubscriptionService {
       status,
       subscription.getRenewedAt(),
       subscription.getCancelledAt(),
-      subscription.getCancelReason()
+      subscription.getCancelReason(),
+      // Un recordatorio de un vencimiento anterior (antes de renovar) ya no aplica.
+      subscription.getExpiresAt().equals(subscription.getReminderSentFor()) ? subscription.getReminderSentAt() : null,
+      subscription.getReminderError()
     );
   }
 

@@ -1,9 +1,11 @@
 package com.sp.parking.operation.web.controller;
 
+import com.sp.parking.operation.application.service.MonthlyReminderService;
 import com.sp.parking.operation.application.service.MonthlySubscriptionService;
 import com.sp.parking.operation.infraestructure.client.AuditClient;
 import com.sp.parking.operation.infraestructure.security.TenantAccessFilter;
 import com.sp.parking.operation.web.dto.MonthlySubscriptionDtos.*;
+import com.sp.parking.operation.web.dto.TicketDtos.WhatsappStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,7 @@ public class MonthlySubscriptionController {
   private static final Set<String> MANAGERS = Set.of("OWNER", "ADMIN");
 
   private final MonthlySubscriptionService service;
+  private final MonthlyReminderService reminderService;
   private final AuditClient auditClient;
 
   @GetMapping
@@ -70,6 +73,17 @@ public class MonthlySubscriptionController {
     MonthlySubscriptionResponse cancelled = service.cancel(tenantId, uuid, request);
     audit(tenantId, "MONTHLY_CANCEL", cancelled, "Cliente " + cancelled.customerName() + (cancelled.cancelReason() == null ? "" : " · Motivo: " + cancelled.cancelReason()));
     return cancelled;
+  }
+
+  /** Envia ya el recordatorio de vencimiento por WhatsApp (el automatico sale solo faltando pocos dias). */
+  @PostMapping("/{uuid}/reminder")
+  public WhatsappStatus sendReminder(@RequestHeader("X-Tenant-Id") UUID tenantId, @PathVariable("uuid") UUID uuid) {
+    WhatsappStatus status = reminderService.sendNow(tenantId, uuid);
+    if (status.sent()) {
+      MonthlySubscriptionResponse subscription = service.findOne(tenantId, uuid);
+      audit(tenantId, "MONTHLY_REMINDER", subscription, "Recordatorio por WhatsApp a " + subscription.customerName() + " · vence " + subscription.expiresAt());
+    }
+    return status;
   }
 
   private void audit(UUID tenantId, String action, MonthlySubscriptionResponse subscription, String details) {

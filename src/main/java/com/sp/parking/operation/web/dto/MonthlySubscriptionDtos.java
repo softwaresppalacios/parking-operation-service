@@ -62,6 +62,9 @@ public final class MonthlySubscriptionDtos {
     String status,
     Instant renewedAt,
     Instant cancelledAt,
-    String cancelReason
+    String cancelReason,
+    /** Recordatorio de vencimiento del periodo actual: cuando se envio, o el error del ultimo intento. */
+    Instant reminderSentAt,
+    String reminderError
   ) {}
 }

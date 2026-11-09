@@ -11,4 +11,6 @@ public interface MonthlySubscriptionRepository extends JpaRepository<MonthlySubs
   Optional<MonthlySubscription> findByTenantIdAndUuid(UUID tenantId, UUID uuid);
   /** Mensualidad activa (no cancelada) cuya vigencia cubre la fecha dada. */
   Optional<MonthlySubscription> findFirstByTenantIdAndPlateIgnoreCaseAndActiveTrueAndExpiresAtGreaterThanEqualOrderByExpiresAtDesc(UUID tenantId, String plate, LocalDate date);
+  /** Mensualidades no canceladas que vencen entre las dos fechas, de todos los parqueaderos. */
+  List<MonthlySubscription> findByActiveTrueAndExpiresAtBetweenOrderByExpiresAt(LocalDate from, LocalDate to);
 }

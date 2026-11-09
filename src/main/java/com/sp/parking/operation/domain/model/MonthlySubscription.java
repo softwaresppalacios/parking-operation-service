@@ -38,6 +38,12 @@ public class MonthlySubscription {
   private Instant cancelledAt;
   private String cancelReason;
   private Instant updatedAt;
+  /** Vencimiento para el que ya se envio el recordatorio por WhatsApp; al renovar cambia y se recuerda de nuevo. */
+  private LocalDate reminderSentFor;
+  private Instant reminderSentAt;
+  /** Ultimo error al enviar el recordatorio automatico (se reintenta en la siguiente pasada). */
+  @Column(length = 500)
+  private String reminderError;
 
   @PrePersist
   void prePersist() {

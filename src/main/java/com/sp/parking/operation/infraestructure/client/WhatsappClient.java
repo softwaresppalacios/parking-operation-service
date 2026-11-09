@@ -63,8 +63,13 @@ public class WhatsappClient {
     return !phoneNumberId.isEmpty() && !accessToken.isEmpty();
   }
 
-  /** Envia la plantilla configurada con sus variables en orden ({{1}}, {{2}}, ...). */
+  /** Envia la plantilla del ticket con sus variables en orden ({{1}}, {{2}}, ...). */
   public Result sendTemplate(String phone, List<String> parameters) {
+    return sendTemplate(templateName, phone, parameters);
+  }
+
+  /** Envia otra plantilla aprobada (mismo idioma), p. ej. el recordatorio de mensualidad. */
+  public Result sendTemplate(String template, String phone, List<String> parameters) {
     if (!enabled) return Result.failed(PAUSED_MESSAGE);
     if (!isConfigured()) return Result.failed("El envío por WhatsApp no está configurado en el servidor");
     String to = normalizePhone(phone);
@@ -75,7 +80,7 @@ public class WhatsappClient {
       "to", to,
       "type", "template",
       "template", Map.of(
-        "name", templateName,
+        "name", template,
         "language", Map.of("code", templateLanguage),
         "components", List.of(Map.of(
           "type", "body",
@@ -92,11 +97,11 @@ public class WhatsappClient {
         .retrieve()
         .body(Map.class);
       String messageId = messageId(response);
-      log.info("Ticket enviado por WhatsApp a {} (mensaje {})", to, messageId);
+      log.info("Plantilla {} enviada por WhatsApp a {} (mensaje {})", template, to, messageId);
       return new Result(true, messageId, null);
     } catch (HttpStatusCodeException ex) {
       String error = metaError(ex);
-      log.warn("WhatsApp rechazó el envío a {}: {}", to, error);
+      log.warn("WhatsApp rechazó la plantilla {} para {}: {}", template, to, error);
       return Result.failed(error);
     } catch (RestClientException ex) {
       log.warn("No se pudo contactar WhatsApp: {}", ex.getMessage());
