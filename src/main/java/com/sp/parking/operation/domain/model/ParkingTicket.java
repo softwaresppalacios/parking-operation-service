@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Table(indexes = @Index(name = "idx_ticket_tenant_checked_in", columnList = "tenantId, checkedInAt"))
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
 public class ParkingTicket {
   @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -20,15 +21,25 @@ public class ParkingTicket {
   @Enumerated(EnumType.STRING)
   private VehicleType vehicleType;
   private String driverPhone;
+  private String driverName;
+  private String driverDocument;
   private String spaceCode;
   private String keySlotCode;
   private String helmetLockerCode;
+  /** Segundo casillero de casco: una moto puede dejar hasta dos cascos, uno por casillero. */
+  private String secondHelmetLockerCode;
   private boolean monthlySubscription;
   private Instant checkedInAt;
   private Instant checkedOutAt;
   @Enumerated(EnumType.STRING)
   private TicketStatus status;
   private BigDecimal amountDue;
+  /** CASH u ONLINE; null si no hubo cobro (mensualidad o valor cero). */
+  private String paymentMethod;
+  /** Descuento en pesos aplicado al cobrar la salida; amountDue ya lo tiene restado. */
+  private BigDecimal discountAmount;
+  @Column(length = 120)
+  private String discountReason;
 
   @PrePersist
   void prePersist() {

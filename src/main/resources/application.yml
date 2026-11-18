@@ -3,6 +3,9 @@ server:
 spring:
   application:
     name: parking-operation-service
+  config:
+    # Secretos locales (token de WhatsApp): archivo .env junto al pom, fuera de git.
+    import: optional:file:.env[.properties]
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/parking_operation_service_db?currentSchema=parking_operation_service}
     username: ${DB_USERNAME:postgres}
@@ -18,5 +21,33 @@ spring:
     init:
       mode: always
 services:
+  audit:
+    # reporting-audit-service: registro de auditoria de las acciones de los usuarios.
+    base-url: ${AUDIT_SERVICE_URL:http://localhost:8085/api}
   tenant-management:
     base-url: ${TENANT_SERVICE_URL:http://localhost:8081/api}
+  pricing:
+    base-url: ${PRICING_SERVICE_URL:http://localhost:8083/api}
+  payment-cash:
+    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8084/api}
+whatsapp:
+  # Sin token o sin numero el envio queda desactivado y la entrada se registra igual.
+  # WHATSAPP_ENABLED=false pausa el envio (p. ej. mientras Meta revisa la plantilla) sin borrar el token.
+  enabled: ${WHATSAPP_ENABLED:true}
+  api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v21.0}
+  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+  access-token: ${WHATSAPP_ACCESS_TOKEN:}
+  template-name: ${WHATSAPP_TEMPLATE_NAME:ticket_sp_parqueaderos}
+  template-language: ${WHATSAPP_TEMPLATE_LANGUAGE:es_CO}
+  default-country-code: ${WHATSAPP_DEFAULT_COUNTRY_CODE:57}
+  # Recordatorio automatico de vencimiento de mensualidad. Variables: {{1}} parqueadero, {{2}} fecha de vencimiento.
+  reminder:
+    enabled: ${WHATSAPP_REMINDER_ENABLED:true}
+    template-name: ${WHATSAPP_REMINDER_TEMPLATE_NAME:recordatorio_mensualidad_parqueadero}
+    days-before: ${WHATSAPP_REMINDER_DAYS_BEFORE:5}
+    # Cada hora de 8 a.m. a 7 p.m. (hora de Colombia): si un envio falla, se reintenta en la siguiente pasada.
+    cron: ${WHATSAPP_REMINDER_CRON:0 0 8-19 * * *}
+  # Confirmacion de pago al crear o renovar una mensualidad. Variables: {{1}} nombre del cliente, {{2}} placa.
+  payment:
+    enabled: ${WHATSAPP_PAYMENT_ENABLED:true}
+    template-name: ${WHATSAPP_PAYMENT_TEMPLATE_NAME:notificacion_pago_mensualidad}

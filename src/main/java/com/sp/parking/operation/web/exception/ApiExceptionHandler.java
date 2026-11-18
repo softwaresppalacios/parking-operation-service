@@ -1,11 +1,14 @@
 package com.sp.parking.operation.web.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class ApiExceptionHandler {
   @ExceptionHandler(ResponseStatusException.class)
@@ -13,8 +16,18 @@ public class ApiExceptionHandler {
     return ResponseEntity.status(ex.getStatusCode()).body(body(ex.getStatusCode(), ex.getReason()));
   }
 
+  @ExceptionHandler(MethodArgumentNotValidException.class)
+  public ResponseEntity<Map<String, Object>> validation(MethodArgumentNotValidException ex) {
+    String message = ex.getBindingResult().getFieldErrors().stream()
+      .findFirst()
+      .map(error -> error.getDefaultMessage())
+      .orElse("Datos inválidos");
+    return ResponseEntity.badRequest().body(body(HttpStatus.BAD_REQUEST, message));
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<Map<String, Object>> generic(Exception ex) {
+    log.error("Error inesperado", ex);
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage()));
   }
 
