@@ -2,6 +2,7 @@ package com.sp.parking.operation.web.dto;
 
 import com.sp.parking.operation.domain.model.VehicleType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -35,7 +36,10 @@ public final class TicketDtos {
   /** El valor lo calcula el servidor con pricing-service; aqui solo llega como se pago. */
   public record CheckOutRequest(
     String paymentMethod,
-    @Size(max = 80, message = "La referencia del pago es demasiado larga") String onlineReference
+    @Size(max = 80, message = "La referencia del pago es demasiado larga") String onlineReference,
+    /** Descuento en pesos (monto exacto, no porcentaje) sobre el valor calculado. No puede superar el total. */
+    @PositiveOrZero(message = "El descuento no puede ser negativo") BigDecimal discountAmount,
+    @Size(max = 120, message = "El motivo del descuento es demasiado largo") String discountReason
   ) {}
   public record TicketResponse(
     UUID uuid,
@@ -55,6 +59,9 @@ public final class TicketDtos {
     /** Codigo corto impreso y enviado al conductor (SPP-XXXXXX). */
     String code,
     String driverName,
-    String driverDocument
+    String driverDocument,
+    /** Descuento aplicado en la salida (pesos); amountDue ya viene con el descuento restado. */
+    BigDecimal discountAmount,
+    String discountReason
   ) {}
 }

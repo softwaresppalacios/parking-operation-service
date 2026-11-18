@@ -27,7 +27,9 @@ public class TicketMapper {
       ticket.getPaymentMethod(),
       code(ticket.getUuid()),
       ticket.getDriverName(),
-      ticket.getDriverDocument()
+      ticket.getDriverDocument(),
+      ticket.getDiscountAmount(),
+      ticket.getDiscountReason()
     );
   }
 

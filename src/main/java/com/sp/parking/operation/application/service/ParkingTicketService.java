@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -99,14 +100,29 @@ public class ParkingTicketService {
       ticket.setAmountDue(BigDecimal.ZERO);
       return mapper.toResponse(ticket);
     }
-    BigDecimal amount = pricingClient.amountDue(tenantId, ticket);
+    BigDecimal total = pricingClient.amountDue(tenantId, ticket);
+    // Descuento de monto exacto (no porcentaje), en pesos enteros. Nunca deja el cobro en negativo.
+    BigDecimal discount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount().setScale(0, RoundingMode.HALF_UP);
+    if (discount.compareTo(total) > 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+        "El descuento ($" + discount.toPlainString() + ") no puede ser mayor que el total a cobrar ($" + total.setScale(0, RoundingMode.HALF_UP).toPlainString() + ")");
+    }
+    BigDecimal amount = total.subtract(discount);
     ticket.setAmountDue(amount);
+    if (discount.signum() > 0) {
+      ticket.setDiscountAmount(discount);
+      ticket.setDiscountReason(request.discountReason() == null || request.discountReason().isBlank() ? null : request.discountReason().trim());
+    }
     if (amount.signum() > 0) {
       String method = PaymentMethods.require(request.paymentMethod());
       ticket.setPaymentMethod(method);
+      String description = discount.signum() > 0
+        ? "Tarifa $" + total.setScale(0, RoundingMode.HALF_UP).toPlainString() + " - descuento $" + discount.toPlainString()
+          + (ticket.getDiscountReason() == null ? "" : " (" + ticket.getDiscountReason() + ")")
+        : null;
       paymentClient.register(tenantId, new PaymentClient.PaymentRequest(
         "PARKING", ticket.getUuid(), amount, method, request.onlineReference(),
-        ticket.getPlate(), ticket.getVehicleType().name(), ticket.getCheckedInAt(), checkedOutAt, null
+        ticket.getPlate(), ticket.getVehicleType().name(), ticket.getCheckedInAt(), checkedOutAt, description
       ));
     }
     return mapper.toResponse(ticket);

@@ -36,6 +36,10 @@ public class ParkingTicket {
   private BigDecimal amountDue;
   /** CASH u ONLINE; null si no hubo cobro (mensualidad o valor cero). */
   private String paymentMethod;
+  /** Descuento en pesos aplicado al cobrar la salida; amountDue ya lo tiene restado. */
+  private BigDecimal discountAmount;
+  @Column(length = 120)
+  private String discountReason;
 
   @PrePersist
   void prePersist() {

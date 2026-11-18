@@ -59,7 +59,10 @@ public class TicketController {
     TicketResponse ticket = ticketService.checkOut(tenantId, ticketUuid, request);
     String charge = ticket.monthlySubscription()
       ? "Mensualidad, sin cobro"
-      : "Cobro " + AuditClient.money(ticket.amountDue()) + (ticket.paymentMethod() == null ? "" : " (" + ticket.paymentMethod() + ")");
+      : "Cobro " + AuditClient.money(ticket.amountDue()) + (ticket.paymentMethod() == null ? "" : " (" + ticket.paymentMethod() + ")")
+        // El descuento queda auditado con su monto y motivo: quien lo aplico es el usuario de la sesion.
+        + (ticket.discountAmount() == null ? "" : " · Descuento " + AuditClient.money(ticket.discountAmount())
+          + (ticket.discountReason() == null ? "" : " (" + ticket.discountReason() + ")"));
     auditClient.record(tenantId, "CHECK_OUT", "TICKET", ticket.code() + " · " + ticket.plate(), "Placa " + ticket.plate() + " · " + charge);
     return ticket;
   }
