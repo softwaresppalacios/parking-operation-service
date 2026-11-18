@@ -47,3 +47,7 @@ whatsapp:
     days-before: ${WHATSAPP_REMINDER_DAYS_BEFORE:5}
     # Cada hora de 8 a.m. a 7 p.m. (hora de Colombia): si un envio falla, se reintenta en la siguiente pasada.
     cron: ${WHATSAPP_REMINDER_CRON:0 0 8-19 * * *}
+  # Confirmacion de pago al crear o renovar una mensualidad. Variables: {{1}} nombre del cliente, {{2}} placa.
+  payment:
+    enabled: ${WHATSAPP_PAYMENT_ENABLED:true}
+    template-name: ${WHATSAPP_PAYMENT_TEMPLATE_NAME:notificacion_pago_mensualidad}

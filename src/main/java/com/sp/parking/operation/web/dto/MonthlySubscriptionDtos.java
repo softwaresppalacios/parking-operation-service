@@ -65,6 +65,13 @@ public final class MonthlySubscriptionDtos {
     String cancelReason,
     /** Recordatorio de vencimiento del periodo actual: cuando se envio, o el error del ultimo intento. */
     Instant reminderSentAt,
-    String reminderError
-  ) {}
+    String reminderError,
+    /** Confirmacion del pago por WhatsApp al crear o renovar; null si no aplica (sin celular, sin cobro o desactivada). */
+    TicketDtos.WhatsappStatus paymentWhatsapp
+  ) {
+    public MonthlySubscriptionResponse withPaymentWhatsapp(TicketDtos.WhatsappStatus whatsapp) {
+      return new MonthlySubscriptionResponse(id, uuid, customerName, customerDocument, customerPhone, plate, vehicleType, amount, paymentMethod,
+        startsAt, expiresAt, paidAt, active, status, renewedAt, cancelledAt, cancelReason, reminderSentAt, reminderError, whatsapp);
+    }
+  }
 }

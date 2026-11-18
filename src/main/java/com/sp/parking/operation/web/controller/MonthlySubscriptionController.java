@@ -1,5 +1,6 @@
 package com.sp.parking.operation.web.controller;
 
+import com.sp.parking.operation.application.service.MonthlyPaymentNotifier;
 import com.sp.parking.operation.application.service.MonthlyReminderService;
 import com.sp.parking.operation.application.service.MonthlySubscriptionService;
 import com.sp.parking.operation.infraestructure.client.AuditClient;
@@ -10,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import java.math.BigDecimal;
 import java.util.*;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 
@@ -21,6 +23,7 @@ public class MonthlySubscriptionController {
 
   private final MonthlySubscriptionService service;
   private final MonthlyReminderService reminderService;
+  private final MonthlyPaymentNotifier paymentNotifier;
   private final AuditClient auditClient;
 
   @GetMapping
@@ -32,7 +35,8 @@ public class MonthlySubscriptionController {
   public MonthlySubscriptionResponse create(@RequestHeader("X-Tenant-Id") UUID tenantId, @Valid @RequestBody CreateMonthlySubscriptionRequest request) {
     MonthlySubscriptionResponse created = service.create(tenantId, request);
     audit(tenantId, "MONTHLY_CREATE", created, "Cliente " + created.customerName() + " · " + AuditClient.money(created.amount()) + "/mes · vigente " + created.startsAt() + " al " + created.expiresAt());
-    return created;
+    // La venta ya quedo guardada con su cobro: se confirma el pago al cliente.
+    return created.withPaymentWhatsapp(paymentNotifier.notifyPayment(created, created.amount()));
   }
 
   /** Editar datos: solo propietario o administrador. */
@@ -57,8 +61,9 @@ public class MonthlySubscriptionController {
     @Valid @RequestBody RenewMonthlySubscriptionRequest request
   ) {
     MonthlySubscriptionResponse renewed = service.renew(tenantId, uuid, request);
-    audit(tenantId, "MONTHLY_RENEW", renewed, request.months() + (request.months() == 1 ? " mes" : " meses") + " · " + AuditClient.money(request.amount() == null ? renewed.amount().multiply(java.math.BigDecimal.valueOf(request.months())) : request.amount()) + " · vence " + renewed.expiresAt());
-    return renewed;
+    BigDecimal paid = request.amount() == null ? renewed.amount().multiply(BigDecimal.valueOf(request.months())) : request.amount();
+    audit(tenantId, "MONTHLY_RENEW", renewed, request.months() + (request.months() == 1 ? " mes" : " meses") + " · " + AuditClient.money(paid) + " · vence " + renewed.expiresAt());
+    return renewed.withPaymentWhatsapp(paymentNotifier.notifyPayment(renewed, paid));
   }
 
   /** Cancelar: solo propietario o administrador. */

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -61,7 +62,7 @@ public class MonthlySubscriptionService {
       .expiresAt(request.startsAt().plusMonths(request.months() == null ? 1 : request.months()))
       .build();
     MonthlySubscription saved = repository.save(subscription);
-    registerPayment(tenantId, saved, saved.getAmount(), method, request.onlineReference(),
+    registerPayment(tenantId, saved, saved.getUuid(), saved.getAmount(), method, request.onlineReference(),
       "Mensualidad " + DAY.format(saved.getStartsAt()) + " al " + DAY.format(saved.getExpiresAt()));
     return toResponse(saved);
   }
@@ -124,7 +125,10 @@ public class MonthlySubscriptionService {
     subscription.setRenewedAt(Instant.now());
     subscription.setPaidAt(Instant.now());
     subscription.setUpdatedAt(Instant.now());
-    registerPayment(tenantId, subscription, amount, method, request.onlineReference(),
+    // Cada renovacion es un cobro nuevo: caja no registra dos veces la misma referencia, asi que la renovacion
+    // no puede usar el uuid de la mensualidad (ese es el de la venta). Se deriva uno fijo por periodo renovado.
+    UUID renewalReference = UUID.nameUUIDFromBytes(("renew:" + subscription.getUuid() + ":" + newExpiry).getBytes(StandardCharsets.UTF_8));
+    registerPayment(tenantId, subscription, renewalReference, amount, method, request.onlineReference(),
       "Renovación mensualidad " + DAY.format(periodStart) + " al " + DAY.format(newExpiry));
     return toResponse(subscription);
   }
@@ -159,10 +163,10 @@ public class MonthlySubscriptionService {
       });
   }
 
-  private void registerPayment(UUID tenantId, MonthlySubscription subscription, BigDecimal amount, String method, String onlineReference, String description) {
+  private void registerPayment(UUID tenantId, MonthlySubscription subscription, UUID reference, BigDecimal amount, String method, String onlineReference, String description) {
     if (amount == null || amount.signum() <= 0) return;
     paymentClient.register(tenantId, new PaymentClient.PaymentRequest(
-      "MONTHLY", subscription.getUuid(), amount, method, onlineReference,
+      "MONTHLY", reference, amount, method, onlineReference,
       subscription.getPlate(), subscription.getVehicleType() == null ? null : subscription.getVehicleType().name(), null, null,
       description
     ));
@@ -200,7 +204,8 @@ public class MonthlySubscriptionService {
       subscription.getCancelReason(),
       // Un recordatorio de un vencimiento anterior (antes de renovar) ya no aplica.
       subscription.getExpiresAt().equals(subscription.getReminderSentFor()) ? subscription.getReminderSentAt() : null,
-      subscription.getReminderError()
+      subscription.getReminderError(),
+      null
     );
   }
 
